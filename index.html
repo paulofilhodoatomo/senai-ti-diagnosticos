@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENAI TI — Central de Diagnósticos</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg:       #010d1a;
+  --bg2:      #041e36;
+  --bg3:      #062a4a;
+  --border:   #0c3d66;
+  --accent:   #00c8f5;
+  --green:    #00f5a0;
+  --warn:     #ff7240;
+  --red:      #ff3060;
+  --text:     #b8ddf5;
+  --muted:    #486f8c;
+  --blue:     #006fe6;
+  --radius:   10px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Space Grotesk',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+code, .mono { font-family:'JetBrains Mono',monospace; }
+
+/* NAV */
+nav {
+  display:flex; align-items:center; gap:0;
+  background:var(--bg2); border-bottom:1px solid var(--border);
+  padding:0 28px; position:sticky; top:0; z-index:100;
+}
+.nav-brand { color:var(--accent); font-size:13px; font-weight:700; letter-spacing:3px; padding:18px 0; margin-right:32px; }
+.nav-brand span { color:var(--muted); }
+.nav-tab {
+  padding:18px 20px; font-size:13px; cursor:pointer; border:none;
+  background:transparent; color:var(--muted); letter-spacing:1px;
+  border-bottom:2px solid transparent; transition:all .2s; white-space:nowrap;
+}
+.nav-tab:hover { color:var(--text); }
+.nav-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.nav-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+.status-dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); }
+.status-dot.off { background:var(--red); box-shadow:0 0 6px var(--red); }
+
+/* PAGES */
+.page { display:none; padding:32px 28px; max-width:1200px; margin:0 auto; }
+.page.active { display:block; }
+
+/* CARDS */
+.card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  padding:22px 26px; margin-bottom:20px;
+}
+.card-title { font-size:10px; color:var(--blue); letter-spacing:3px; text-transform:uppercase; margin-bottom:16px; }
+
+/* UPLOAD ZONE */
+.upload-zone {
+  border:2px dashed var(--border); border-radius:var(--radius);
+  padding:48px 32px; text-align:center; cursor:pointer; transition:all .2s;
+  background:rgba(0,200,245,.02);
+}
+.upload-zone:hover, .upload-zone.drag { border-color:var(--accent); background:rgba(0,200,245,.05); }
+.upload-zone h3 { font-size:16px; color:var(--text); margin-bottom:8px; }
+.upload-zone p { font-size:13px; color:var(--muted); }
+.upload-zone input { display:none; }
+.upload-icon { font-size:40px; margin-bottom:16px; }
+
+/* BUTTONS */
+.btn {
+  padding:10px 20px; border-radius:6px; border:none; cursor:pointer;
+  font-family:inherit; font-size:13px; font-weight:500; letter-spacing:.5px; transition:all .15s;
+}
+.btn-primary { background:var(--accent); color:#010d1a; }
+.btn-primary:hover { background:#00e0ff; }
+.btn-primary:disabled { opacity:.4; cursor:not-allowed; }
+.btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+.btn-ghost:hover { color:var(--text); border-color:var(--text); }
+.btn-danger { background:rgba(255,48,96,.15); color:var(--red); border:1px solid var(--red); }
+.btn-success { background:rgba(0,245,160,.1); color:var(--green); border:1px solid var(--green); }
+
+/* BADGES */
+.badge { padding:3px 10px; border-radius:99px; font-size:11px; display:inline-block; font-weight:500; }
+.badge-ok  { background:rgba(0,245,160,.1); color:var(--green); border:1px solid var(--green); }
+.badge-no  { background:rgba(255,114,64,.1); color:var(--warn); border:1px solid var(--warn); }
+.badge-err { background:rgba(255,48,96,.1); color:var(--red); border:1px solid var(--red); }
+.badge-info{ background:rgba(0,111,230,.15); color:#5aa0ff; border:1px solid #1a5cbf; }
+
+/* TABLE */
+table { width:100%; border-collapse:collapse; font-size:13px; }
+td,th { padding:10px 14px; text-align:left; border-bottom:1px solid rgba(12,61,102,.4); }
+th { color:var(--accent); font-size:10px; letter-spacing:1px; text-transform:uppercase; background:rgba(0,200,245,.04); font-weight:600; }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:rgba(0,200,245,.03); }
+
+/* GRID */
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+.grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+
+/* STAT CARD */
+.stat { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; text-align:center; }
+.stat-label { font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
+.stat-val { font-size:22px; font-weight:700; }
+.stat-val.green { color:var(--green); }
+.stat-val.warn  { color:var(--warn); }
+.stat-val.red   { color:var(--red); }
+.stat-val.blue  { color:var(--accent); }
+
+/* PROGRESS BAR */
+.progress-wrap { background:var(--bg3); border-radius:99px; height:6px; overflow:hidden; margin-top:6px; }
+.progress-bar  { height:100%; border-radius:99px; transition:width .6s ease; }
+
+/* FORM */
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+.form-group { display:flex; flex-direction:column; gap:6px; }
+label { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+input, select, textarea {
+  background:var(--bg3); border:1px solid var(--border); border-radius:6px;
+  color:var(--text); font-family:inherit; font-size:13px; padding:10px 14px;
+  transition:border-color .2s; outline:none;
+}
+input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+select option { background:var(--bg2); }
+
+/* TOAST */
+#toast {
+  position:fixed; bottom:28px; right:28px; padding:14px 22px;
+  background:var(--bg2); border:1px solid var(--border); border-radius:8px;
+  font-size:13px; z-index:999; opacity:0; transform:translateY(12px);
+  transition:all .3s; pointer-events:none; max-width:340px;
+}
+#toast.show { opacity:1; transform:translateY(0); }
+#toast.ok  { border-color:var(--green); color:var(--green); }
+#toast.err { border-color:var(--red); color:var(--red); }
+
+/* LOG */
+#import-log {
+  background:var(--bg); border:1px solid var(--border); border-radius:6px;
+  padding:16px; font-size:12px; max-height:200px; overflow-y:auto; margin-top:16px;
+  font-family:'JetBrains Mono',monospace; line-height:1.8;
+}
+.log-ok   { color:var(--green); }
+.log-warn { color:var(--warn); }
+.log-err  { color:var(--red); }
+.log-info { color:var(--accent); }
+
+/* DIAG LIST */
+.diag-row {
+  display:flex; align-items:center; gap:16px; padding:14px 18px;
+  border:1px solid var(--border); border-radius:8px; margin-bottom:10px;
+  background:var(--bg2); cursor:pointer; transition:all .2s;
+}
+.diag-row:hover { border-color:var(--accent); background:rgba(0,200,245,.04); }
+.diag-unidade { font-weight:600; color:var(--text); flex:1; }
+.diag-meta { font-size:12px; color:var(--muted); }
+.diag-actions { display:flex; gap:8px; }
+
+/* CHART CONTAINER */
+.chart-box { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:22px; }
+.chart-title { font-size:10px; color:var(--blue); letter-spacing:3px; text-transform:uppercase; margin-bottom:18px; }
+canvas { max-height:280px; }
+
+/* FILTER BAR */
+.filter-bar { display:flex; gap:12px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+.filter-bar input, .filter-bar select { flex:1; min-width:160px; }
+
+/* SECTION DIVIDER */
+.section-title { font-size:10px; color:var(--blue); letter-spacing:3px; text-transform:uppercase; margin:28px 0 14px; border-bottom:1px solid var(--border); padding-bottom:8px; }
+
+/* MODAL */
+.modal-bg { display:none; position:fixed; inset:0; background:rgba(1,13,26,.85); z-index:200; align-items:center; justify-content:center; }
+.modal-bg.open { display:flex; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:14px; width:90%; max-width:860px; max-height:90vh; overflow-y:auto; padding:28px 32px; }
+.modal-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+.modal-head h2 { font-size:16px; font-weight:600; color:var(--accent); }
+.modal-close { background:transparent; border:none; color:var(--muted); font-size:20px; cursor:pointer; }
+.modal-close:hover { color:var(--text); }
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .grid2,.grid3,.grid4 { grid-template-columns:1fr; }
+  .form-row { grid-template-columns:1fr; }
+  nav { padding:0 16px; overflow-x:auto; }
+  .page { padding:20px 16px; }
+}
+
+/* SPINNER */
+.spinner { display:inline-block; width:18px; height:18px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* EMPTY STATE */
+.empty { text-align:center; padding:60px 20px; color:var(--muted); }
+.empty h3 { font-size:16px; color:var(--text); margin-bottom:8px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">SENAI <span>TI</span></div>
+  <button class="nav-tab active" onclick="showPage('import')">⬆ Importar</button>
+  <button class="nav-tab" onclick="showPage('historico')">📋 Histórico</button>
+  <button class="nav-tab" onclick="showPage('analise')">📊 Análise Comparativa</button>
+  <button class="nav-tab" onclick="showPage('relatorio')">📄 Relatório</button>
+  <div class="nav-right">
+    <div class="status-dot off" id="conn-dot"></div>
+    <span style="font-size:12px;color:var(--muted)" id="conn-label">Conectando…</span>
+  </div>
+</nav>
+
+<!-- ==================== IMPORTAR ==================== -->
+<div class="page active" id="page-import">
+  <div style="margin-bottom:24px">
+    <h1 style="font-size:20px;color:var(--accent);letter-spacing:2px">IMPORTAR DIAGNÓSTICO</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">Importe arquivos .html ou .txt gerados pelo sistema de diagnóstico SENAI</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Arquivo de diagnóstico</div>
+    <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="upload-icon">📁</div>
+      <h3>Arraste ou clique para selecionar</h3>
+      <p>Aceita arquivos .html e .txt • Renomeados ou originais</p>
+      <input type="file" id="file-input" accept=".html,.txt" multiple>
+    </div>
+    <div id="file-list" style="margin-top:16px;display:none">
+      <div id="file-items"></div>
+      <div style="display:flex;gap:12px;margin-top:16px">
+        <button class="btn btn-primary" id="btn-import" onclick="importarArquivos()">⬆ Importar para Supabase</button>
+        <button class="btn btn-ghost" onclick="limparArquivos()">Limpar</button>
+      </div>
+    </div>
+    <div id="import-log" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ==================== HISTÓRICO ==================== -->
+<div class="page" id="page-historico">
+  <div style="margin-bottom:24px">
+    <h1 style="font-size:20px;color:var(--accent);letter-spacing:2px">HISTÓRICO DE DIAGNÓSTICOS</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">Todos os registros salvos no banco de dados</p>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="hist-search" placeholder="Buscar por unidade, especialista..." oninput="filtrarHistorico()">
+    <select id="hist-unidade" onchange="filtrarHistorico()"><option value="">Todas as unidades</option></select>
+    <select id="hist-ano" onchange="filtrarHistorico()"><option value="">Todos os anos</option></select>
+    <button class="btn btn-ghost" onclick="carregarHistorico()">↻ Atualizar</button>
+  </div>
+
+  <div id="hist-lista">
+    <div class="empty"><span class="spinner"></span><p style="margin-top:12px">Carregando…</p></div>
+  </div>
+</div>
+
+<!-- ==================== ANÁLISE ==================== -->
+<div class="page" id="page-analise">
+  <div style="margin-bottom:24px">
+    <h1 style="font-size:20px;color:var(--accent);letter-spacing:2px">ANÁLISE COMPARATIVA</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">Gráficos e indicadores comparando unidades e períodos</p>
+  </div>
+
+  <div class="grid4" id="stats-geral" style="margin-bottom:28px">
+    <div class="stat"><div class="stat-label">Diagnósticos</div><div class="stat-val blue" id="st-total">—</div></div>
+    <div class="stat"><div class="stat-label">Unidades</div><div class="stat-val" id="st-unidades">—</div></div>
+    <div class="stat"><div class="stat-label">Computadores</div><div class="stat-val green" id="st-pcs">—</div></div>
+    <div class="stat"><div class="stat-label">Compat. OK</div><div class="stat-val" id="st-compat">—</div></div>
+  </div>
+
+  <div class="grid2" style="margin-bottom:20px">
+    <div class="chart-box">
+      <div class="chart-title">Apps essenciais instalados por unidade (%)</div>
+      <canvas id="chart-apps"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Compatibilidade geral por unidade</div>
+      <canvas id="chart-compat"></canvas>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-bottom:20px">
+    <div class="chart-box">
+      <div class="chart-title">RAM média por unidade (GB)</div>
+      <canvas id="chart-ram"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Computadores por laboratório</div>
+      <canvas id="chart-labs"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Apps mais ausentes entre todas as unidades</div>
+    <div id="apps-ausentes-lista"></div>
+  </div>
+</div>
+
+<!-- ==================== RELATÓRIO ==================== -->
+<div class="page" id="page-relatorio">
+  <div style="margin-bottom:24px">
+    <h1 style="font-size:20px;color:var(--accent);letter-spacing:2px">RELATÓRIO POR UNIDADE</h1>
+    <p style="color:var(--muted);font-size:13px;margin-top:4px">Selecione um diagnóstico para gerar o resumo detalhado</p>
+  </div>
+  <div class="card">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Unidade</label>
+        <select id="rel-unidade" onchange="carregarDiagnosticosPorUnidade()"><option value="">Selecione a unidade</option></select>
+      </div>
+      <div class="form-group">
+        <label>Diagnóstico</label>
+        <select id="rel-diagnostico"><option value="">Selecione o diagnóstico</option></select>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="gerarRelatorio()">📄 Gerar Resumo</button>
+  </div>
+  <div id="relatorio-output" style="margin-top:20px"></div>
+</div>
+
+<!-- MODAL DETALHE -->
+<div class="modal-bg" id="modal-detalhe">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modal-title">Detalhes do Diagnóstico</h2>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ======== SUPABASE ========
+const SUPA_URL = 'https://gnnzxjbvzzjodwbaegfy.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdubnp4amJ2enpqb2R3YmFlZ2Z5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODMyNjcsImV4cCI6MjA5MDA1OTI2N30.yTkxKALdMwNXY53PcqIiSi6mjopoXhK8eFAVe3SF2gI';
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+
+let arquivosSelecionados = [];
+let todosDiagnosticos = [];
+let chartsInstanciados = {};
+
+// ======== INIT ========
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const { error } = await db.from('diagnosticos').select('id').limit(1);
+    if (!error) {
+      document.getElementById('conn-dot').classList.remove('off');
+      document.getElementById('conn-label').textContent = 'Conectado';
+    }
+  } catch(e) {
+    document.getElementById('conn-label').textContent = 'Erro';
+  }
+  setupDrop();
+  carregarHistorico();
+  carregarAnalise();
+  carregarUnidadesRelatorio();
+});
+
+// ======== NAVEGAÇÃO ========
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+  if (id === 'analise') carregarAnalise();
+  if (id === 'historico') carregarHistorico();
+}
+
+// ======== UPLOAD / DROP ========
+function setupDrop() {
+  const zone = document.getElementById('drop-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    handleFiles([...e.dataTransfer.files]);
+  });
+  document.getElementById('file-input').addEventListener('change', e => {
+    handleFiles([...e.target.files]);
+  });
+}
+
+function handleFiles(files) {
+  arquivosSelecionados = files.filter(f => f.name.match(/\.(html|txt)$/i));
+  if (!arquivosSelecionados.length) { toast('Nenhum arquivo válido (.html ou .txt)', 'err'); return; }
+  const items = document.getElementById('file-items');
+  items.innerHTML = arquivosSelecionados.map((f,i) =>
+    `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--accent);font-size:20px">${f.name.endsWith('.html') ? '🌐' : '📄'}</span>
+      <div style="flex:1"><div style="font-size:13px">${f.name}</div><div style="font-size:11px;color:var(--muted)">${(f.size/1024).toFixed(1)} KB</div></div>
+      <span id="status-${i}" style="font-size:12px;color:var(--muted)">Aguardando</span>
+    </div>`
+  ).join('');
+  document.getElementById('file-list').style.display = 'block';
+  document.getElementById('import-log').style.display = 'none';
+}
+
+function limparArquivos() {
+  arquivosSelecionados = [];
+  document.getElementById('file-list').style.display = 'none';
+  document.getElementById('import-log').style.display = 'none';
+  document.getElementById('file-input').value = '';
+}
+
+// ======== PARSER HTML ========
+function parseHTMLDiagnostico(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  const getText = (selector) => doc.querySelector(selector)?.textContent?.trim() || '';
+  
+  // Helper: pegar linhas de tabela por título de seção
+  function getTabelaApos(h2Text) {
+    const headers = doc.querySelectorAll('h2');
+    for (const h of headers) {
+      if (h.textContent.includes(h2Text)) {
+        let el = h.nextElementSibling;
+        while (el && el.tagName !== 'TABLE' && el.tagName !== 'H2') {
+          if (el.tagName === 'TABLE') return el;
+          el = el.nextElementSibling;
+        }
+        return el?.tagName === 'TABLE' ? el : null;
+      }
+    }
+    return null;
+  }
+
+  function parseTabela(tbl) {
+    if (!tbl) return {};
+    const rows = tbl.querySelectorAll('tr');
+    const obj = {};
+    rows.forEach(tr => {
+      const cells = tr.querySelectorAll('td');
+      if (cells.length >= 2) {
+        const key = cells[0].textContent.trim();
+        const val = cells[1].textContent.trim();
+        obj[key] = val;
+      }
+    });
+    return obj;
+  }
+
+  // === VISITA ===
+  const visitaData = parseTabela(getTabelaApos('Dados da Visita'));
+  const unidade = visitaData['Unidade SENAI'] || '';
+  const especialista = visitaData['Especialista'] || '';
+  const acompanhante = visitaData['Acompanhante'] || '';
+  const dataVisitaStr = visitaData['Data'] || '';
+  
+  // Converter data
+  let dataVisita = null;
+  try {
+    // "quarta-feira, 25 de março de 2026"
+    const meses = {janeiro:'01',fevereiro:'02',março:'03',abril:'04',maio:'05',junho:'06',julho:'07',agosto:'08',setembro:'09',outubro:'10',novembro:'11',dezembro:'12'};
+    const m = dataVisitaStr.match(/(\d+)\s+de\s+(\w+)\s+de\s+(\d{4})/i);
+    if (m) dataVisita = `${m[3]}-${meses[m[2].toLowerCase()]}-${m[1].padStart(2,'0')}`;
+  } catch(e) {}
+
+  // Timestamp gerado
+  const footerText = doc.querySelector('footer')?.textContent || '';
+  const tsMatch = footerText.match(/(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2})/);
+  let geradoEm = null;
+  if (tsMatch) {
+    const [d,mo,y] = tsMatch[1].split(' ')[0].split('/');
+    const t = tsMatch[1].split(' ')[1];
+    geradoEm = `${y}-${mo}-${d}T${t}`;
+  }
+
+  // === REDE ===
+  const redeData = parseTabela(getTabelaApos('Identificação na Rede'));
+  const destItems = doc.querySelectorAll('.dest-item');
+  let hostname='', ip='', dominio='';
+  destItems.forEach(d => {
+    const lbl = d.querySelector('.dest-label')?.textContent?.trim();
+    const val = d.querySelector('.dest-val')?.textContent?.trim();
+    if (lbl === 'Hostname') hostname = val;
+    if (lbl === 'Endereço IP') ip = val;
+    if (lbl === 'Domínio') dominio = val;
+  });
+  const rede = {
+    hostname, ip, dominio,
+    tipo_conexao: redeData['Tipo de Conexão'] || '',
+    velocidade: redeData['Velocidade'] || '',
+    mac: redeData['MAC'] || '',
+    gateway: redeData['Gateway'] || '',
+    dns: redeData['DNS'] || '',
+    internet: (redeData['Internet'] || '').includes('Conectado')
+  };
+
+  // === LABORATÓRIO ===
+  const labBlocks = doc.querySelectorAll('.lab-blk');
+  const laboratorios = [];
+  labBlocks.forEach(lb => {
+    const nome_lab = lb.querySelector('.lab-t')?.textContent?.replace('◈','').trim() || '';
+    const rows = lb.querySelectorAll('tr');
+    let qtd=0, codigo='', obs='';
+    rows.forEach(tr => {
+      const cells = tr.querySelectorAll('td');
+      if (cells.length >= 2) {
+        const k = cells[0].textContent.trim();
+        const v = cells[1].textContent.trim();
+        if (k === 'Computadores') qtd = parseInt(v) || 0;
+        if (k.includes('Código') || k.includes('Patrimônio')) codigo = v;
+        if (k === 'Observações') obs = v === '—' ? '' : v;
+      }
+    });
+    laboratorios.push({ nome_lab, qtd_computadores:qtd, codigo_patrimonio:codigo, observacoes:obs });
+  });
+
+  // === HARDWARE ===
+  const hwData = parseTabela(getTabelaApos('Hardware'));
+  const ramStr = hwData['RAM Total / Tipo'] || '';
+  const ramMatch = ramStr.match(/([\d.]+)\s*GB/);
+  const ramTipoMatch = ramStr.match(/—\s*(.+)/);
+  
+  // Discos
+  const discos = [];
+  Object.keys(hwData).forEach(k => {
+    const m = k.match(/Disco\s*\(([A-Z]:\\?)\)/i);
+    if (m) {
+      const v = hwData[k];
+      const totalM = v.match(/([\d.]+)\s*GB\s*total/);
+      const livreM = v.match(/([\d.]+)\s*GB\s*livre/);
+      const tipo = v.includes('SSD') ? 'SSD' : v.includes('HDD') ? 'HDD' : 'N/D';
+      discos.push({ letra:m[1], tipo, total_gb: totalM ? parseFloat(totalM[1]) : 0, livre_gb: livreM ? parseFloat(livreM[1]) : 0 });
+    }
+  });
+
+  const nucleosStr = hwData['Núcleos Físicos / Lógicos'] || '0 / 0';
+  const [nf, nl] = nucleosStr.split('/').map(s => parseInt(s.trim()) || 0);
+  const freqStr = hwData['Frequência'] || '';
+  const freqM = freqStr.match(/([\d.]+)\s*MHz/);
+
+  const hw = {
+    processador: hwData['Processador'] || '',
+    familia_cpu: hwData['Família'] || '',
+    nucleos_fisicos: nf,
+    nucleos_logicos: nl,
+    frequencia_mhz: freqM ? parseInt(freqM[1]) : 0,
+    ram_gb: ramMatch ? parseFloat(ramMatch[1]) : 0,
+    ram_tipo: ramTipoMatch ? ramTipoMatch[1].trim() : ramStr,
+    discos
+  };
+
+  // === SISTEMA OPERACIONAL ===
+  const soData = parseTabela(getTabelaApos('Sistema Operacional'));
+  const sistemaStr = soData['Sistema'] || '';
+  const buildM = sistemaStr.match(/Build\s+([\d]+)/i);
+  const versaoM = sistemaStr.match(/v([\w]+)\)/);
+  let dataInst = null;
+  try {
+    const di = soData['Data de Instalação'] || '';
+    if (di.match(/\d{2}\/\d{2}\/\d{4}/)) {
+      const [d,m,y] = di.split('/');
+      dataInst = `${y}-${m}-${d}`;
+    }
+  } catch(e){}
+  let ultimoBoot = null;
+  try {
+    const ub = soData['Último Boot'] || '';
+    const m = ub.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2}:\d{2})/);
+    if (m) ultimoBoot = `${m[3]}-${m[2]}-${m[1]}T${m[4]}`;
+  } catch(e){}
+
+  const so = {
+    sistema: sistemaStr,
+    arquitetura: soData['Arquitetura'] || '',
+    data_instalacao: dataInst,
+    ultimo_boot: ultimoBoot,
+    build: buildM ? buildM[1] : '',
+    versao: versaoM ? versaoM[1] : ''
+  };
+
+  // === APPS DS ===
+  const appsDS = [];
+  const hApps = Array.from(doc.querySelectorAll('h2')).find(h => h.textContent.includes('Apps DS'));
+  if (hApps) {
+    let el = hApps.nextElementSibling;
+    while (el && el.tagName === 'TABLE') {
+      el.querySelectorAll('tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 5) {
+          const statusTxt = cells[4].textContent.trim();
+          appsDS.push({
+            nome: cells[0].textContent.trim(),
+            grupo: cells[1].textContent.trim(),
+            prioridade: cells[2].textContent.trim(),
+            versao: cells[3].textContent.trim() === '—' ? null : cells[3].textContent.trim(),
+            status: statusTxt.includes('Instalado') ? 'instalado' : statusTxt.includes('encontrado') ? 'nao_encontrado' : 'desconhecido'
+          });
+        }
+      });
+      el = el.nextElementSibling;
+    }
+  }
+
+  // === APPS INSTALADOS ===
+  const appsInst = [];
+  const hTodos = Array.from(doc.querySelectorAll('h2')).find(h => h.textContent.includes('Todos os Apps'));
+  if (hTodos) {
+    let el = hTodos.nextElementSibling;
+    if (el && el.tagName === 'TABLE') {
+      el.querySelectorAll('tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 4) {
+          let dataI = null;
+          try {
+            const ds = cells[3].textContent.trim();
+            if (ds.match(/\d{2}\/\d{2}\/\d{4}/)) {
+              const [d,m,y] = ds.split('/');
+              dataI = `${y}-${m}-${d}`;
+            }
+          } catch(e){}
+          appsInst.push({
+            nome: cells[0].textContent.trim(),
+            versao: cells[1].textContent.trim() === '—' ? null : cells[1].textContent.trim(),
+            publicador: cells[2].textContent.trim(),
+            data_instalacao: dataI
+          });
+        }
+      });
+    }
+  }
+
+  // === COMPATIBILIDADE ===
+  const compat = [];
+  const hCompat = Array.from(doc.querySelectorAll('h2')).find(h => h.textContent.includes('Compatibilidade'));
+  if (hCompat) {
+    let el = hCompat.nextElementSibling;
+    if (el && el.tagName === 'TABLE') {
+      el.querySelectorAll('tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 3) {
+          const stxt = cells[2].textContent.trim();
+          compat.push({
+            criterio: cells[0].textContent.trim(),
+            detalhe: cells[1].textContent.trim(),
+            status: stxt.includes('OK') ? 'ok' : stxt.includes('Verificar') ? 'verificar' : 'erro'
+          });
+        }
+      });
+    }
+  }
+
+  return { unidade, especialista, acompanhante, data_visita: dataVisita, gerado_em: geradoEm, fonte:'html', rede, laboratorios, hw, so, appsDS, appsInst, compat };
+}
+
+// ======== IMPORTAR ========
+async function importarArquivos() {
+  if (!arquivosSelecionados.length) return;
+  const btn = document.getElementById('btn-import');
+  btn.disabled = true; btn.textContent = '⏳ Importando…';
+
+  const logEl = document.getElementById('import-log');
+  logEl.style.display = 'block';
+  logEl.innerHTML = '';
+
+  function log(msg, tipo='info') {
+    logEl.innerHTML += `<div class="log-${tipo}">${msg}</div>`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  for (let i = 0; i < arquivosSelecionados.length; i++) {
+    const f = arquivosSelecionados[i];
+    document.getElementById(`status-${i}`).textContent = '⏳';
+    log(`[${f.name}] Lendo arquivo…`);
+    try {
+      const text = await f.text();
+      log(`[${f.name}] Parseando estrutura…`);
+      const d = parseHTMLDiagnostico(text);
+
+      if (!d.unidade) { log(`[${f.name}] ⚠ Unidade não encontrada, ignorando.`, 'warn'); continue; }
+
+      log(`[${f.name}] Unidade: ${d.unidade} | Especialista: ${d.especialista}`);
+
+      // Inserir diagnóstico
+      const { data: diagRow, error: e1 } = await db.from('diagnosticos').insert({
+        unidade: d.unidade, especialista: d.especialista, acompanhante: d.acompanhante,
+        data_visita: d.data_visita, gerado_em: d.gerado_em, fonte: d.fonte
+      }).select().single();
+      if (e1) throw e1;
+      const did = diagRow.id;
+      log(`[${f.name}] ✓ Diagnóstico criado: ${did.slice(0,8)}…`, 'ok');
+
+      // Rede
+      await db.from('rede').insert({ diagnostico_id: did, ...d.rede });
+      log(`[${f.name}] ✓ Rede salva`, 'ok');
+
+      // Laboratórios
+      for (const lab of d.laboratorios) {
+        await db.from('laboratorio').insert({ diagnostico_id: did, ...lab });
+      }
+      log(`[${f.name}] ✓ ${d.laboratorios.length} laboratório(s) salvo(s)`, 'ok');
+
+      // Hardware
+      await db.from('hardware').insert({ diagnostico_id: did, ...d.hw });
+      log(`[${f.name}] ✓ Hardware salvo`, 'ok');
+
+      // SO
+      await db.from('sistema_operacional').insert({ diagnostico_id: did, ...d.so });
+      log(`[${f.name}] ✓ SO salvo`, 'ok');
+
+      // Apps DS
+      if (d.appsDS.length) {
+        const appsChunks = [];
+        for (let j=0; j<d.appsDS.length; j+=50) appsChunks.push(d.appsDS.slice(j,j+50));
+        for (const chunk of appsChunks)
+          await db.from('apps_ds').insert(chunk.map(a => ({ diagnostico_id: did, ...a })));
+        log(`[${f.name}] ✓ ${d.appsDS.length} apps DS salvos`, 'ok');
+      }
+
+      // Apps instalados
+      if (d.appsInst.length) {
+        await db.from('apps_instalados').insert(d.appsInst.map(a => ({ diagnostico_id: did, ...a })));
+        log(`[${f.name}] ✓ ${d.appsInst.length} apps instalados salvos`, 'ok');
+      }
+
+      // Compatibilidade
+      if (d.compat.length) {
+        await db.from('compatibilidade').insert(d.compat.map(c => ({ diagnostico_id: did, ...c })));
+        log(`[${f.name}] ✓ ${d.compat.length} critérios de compatibilidade salvos`, 'ok');
+      }
+
+      document.getElementById(`status-${i}`).textContent = '✓ OK';
+      document.getElementById(`status-${i}`).style.color = 'var(--green)';
+      log(`[${f.name}] ✅ Importação concluída!\n`, 'ok');
+    } catch(err) {
+      log(`[${f.name}] ❌ Erro: ${err.message || JSON.stringify(err)}`, 'err');
+      document.getElementById(`status-${i}`).textContent = '✗ Erro';
+      document.getElementById(`status-${i}`).style.color = 'var(--red)';
+    }
+  }
+
+  btn.disabled = false; btn.textContent = '⬆ Importar para Supabase';
+  toast('Importação concluída!', 'ok');
+  carregarHistorico();
+  carregarAnalise();
+}
+
+// ======== HISTÓRICO ========
+async function carregarHistorico() {
+  const el = document.getElementById('hist-lista');
+  el.innerHTML = '<div class="empty"><span class="spinner"></span><p style="margin-top:12px">Carregando…</p></div>';
+
+  const { data, error } = await db.from('diagnosticos').select('*, laboratorio(qtd_computadores,nome_lab)').order('criado_em', { ascending: false });
+  if (error) { el.innerHTML = `<div class="empty"><p style="color:var(--red)">Erro: ${error.message}</p></div>`; return; }
+
+  todosDiagnosticos = data;
+
+  // Popular filtros
+  const unidades = [...new Set(data.map(d => d.unidade))].sort();
+  const anos = [...new Set(data.map(d => d.data_visita ? d.data_visita.slice(0,4) : null).filter(Boolean))].sort();
+  
+  const selUn = document.getElementById('hist-unidade');
+  selUn.innerHTML = '<option value="">Todas as unidades</option>' + unidades.map(u => `<option>${u}</option>`).join('');
+  const selAno = document.getElementById('hist-ano');
+  selAno.innerHTML = '<option value="">Todos os anos</option>' + anos.map(a => `<option>${a}</option>`).join('');
+
+  renderHistorico(data);
+}
+
+function filtrarHistorico() {
+  const q = document.getElementById('hist-search').value.toLowerCase();
+  const un = document.getElementById('hist-unidade').value;
+  const ano = document.getElementById('hist-ano').value;
+  const filtrado = todosDiagnosticos.filter(d => {
+    if (un && d.unidade !== un) return false;
+    if (ano && (!d.data_visita || !d.data_visita.startsWith(ano))) return false;
+    if (q && !(d.unidade.toLowerCase().includes(q) || (d.especialista||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+  renderHistorico(filtrado);
+}
+
+function renderHistorico(data) {
+  const el = document.getElementById('hist-lista');
+  if (!data.length) { el.innerHTML = '<div class="empty"><h3>Nenhum diagnóstico encontrado</h3><p>Importe arquivos na aba "Importar"</p></div>'; return; }
+  el.innerHTML = data.map(d => {
+    const qtdPCs = (d.laboratorio || []).reduce((s,l) => s + (l.qtd_computadores||0), 0);
+    const labs = (d.laboratorio || []).map(l => l.nome_lab).join(', ');
+    return `<div class="diag-row" onclick="verDetalhe('${d.id}')">
+      <div style="font-size:20px">🏫</div>
+      <div style="flex:1">
+        <div class="diag-unidade">${d.unidade}</div>
+        <div class="diag-meta">${d.especialista || '—'} · ${d.data_visita || '—'} · Labs: ${labs || '—'} · ${qtdPCs} PCs</div>
+      </div>
+      <div class="diag-actions">
+        <span style="font-size:11px;color:var(--muted)">${new Date(d.criado_em).toLocaleString('pt-BR')}</span>
+        <button class="btn btn-danger" style="padding:6px 12px;font-size:11px" onclick="event.stopPropagation();deletarDiagnostico('${d.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function deletarDiagnostico(id) {
+  if (!confirm('Confirma exclusão deste diagnóstico?')) return;
+  await db.from('diagnosticos').delete().eq('id', id);
+  toast('Diagnóstico excluído', 'ok');
+  carregarHistorico();
+  carregarAnalise();
+}
+
+async function verDetalhe(id) {
+  const { data: d } = await db.from('diagnosticos').select(`
+    *, rede(*), laboratorio(*), hardware(*), sistema_operacional(*),
+    apps_ds(*), apps_instalados(*), compatibilidade(*)
+  `).eq('id', id).single();
+
+  if (!d) return;
+  document.getElementById('modal-title').textContent = `${d.unidade} — ${d.data_visita || ''}`;
+
+  const hw = d.hardware?.[0] || {};
+  const so = d.sistema_operacional?.[0] || {};
+  const rd = d.rede?.[0] || {};
+  const appsInst = d.apps_ds?.filter(a => a.status === 'instalado') || [];
+  const appsTotal = d.apps_ds?.length || 0;
+  const compatOK = d.compatibilidade?.filter(c => c.status === 'ok').length || 0;
+  const compatTotal = d.compatibilidade?.length || 0;
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="grid3" style="margin-bottom:20px">
+      <div class="stat"><div class="stat-label">Processador</div><div style="font-size:12px;color:var(--accent);margin-top:4px">${hw.processador||'—'}</div></div>
+      <div class="stat"><div class="stat-label">RAM</div><div class="stat-val ${hw.ram_gb >= 8 ? 'green' : 'warn'}">${hw.ram_gb||'—'} GB</div></div>
+      <div class="stat"><div class="stat-label">Apps Essenciais</div><div class="stat-val blue">${appsInst.length}/${appsTotal}</div></div>
+    </div>
+    <div class="section-title">Hardware</div>
+    <table><tr><td>Processador</td><td class="v" style="color:#fff">${hw.processador||'—'}</td></tr>
+    <tr><td>Núcleos</td><td>${hw.nucleos_fisicos||0} físicos / ${hw.nucleos_logicos||0} lógicos</td></tr>
+    <tr><td>RAM</td><td>${hw.ram_gb||0} GB — ${hw.ram_tipo||'—'}</td></tr>
+    ${(hw.discos||[]).map(d => `<tr><td>Disco (${d.letra})</td><td>${d.tipo} · ${d.total_gb} GB total · ${d.livre_gb} GB livre</td></tr>`).join('')}
+    </table>
+    <div class="section-title">Sistema Operacional</div>
+    <table>
+    <tr><td>Sistema</td><td style="color:#fff">${so.sistema||'—'}</td></tr>
+    <tr><td>Arquitetura</td><td>${so.arquitetura||'—'}</td></tr>
+    <tr><td>Data Instalação</td><td>${so.data_instalacao||'—'}</td></tr>
+    </table>
+    <div class="section-title">Compatibilidade (${compatOK}/${compatTotal} OK)</div>
+    <table><tr><th>Critério</th><th>Detalhe</th><th>Status</th></tr>
+    ${(d.compatibilidade||[]).map(c => `<tr><td>${c.criterio}</td><td style="font-size:11px;color:var(--muted)">${c.detalhe}</td><td><span class="badge badge-${c.status==='ok'?'ok':c.status==='verificar'?'no':'err'}">${c.status}</span></td></tr>`).join('')}
+    </table>
+    <div class="section-title">Apps DS</div>
+    <table><tr><th>App</th><th>Grupo</th><th>Prioridade</th><th>Status</th></tr>
+    ${(d.apps_ds||[]).map(a => `<tr><td>${a.nome}</td><td style="color:var(--muted);font-size:11px">${a.grupo}</td><td style="font-size:11px;color:${a.prioridade==='ESSENCIAL'?'var(--red)':a.prioridade==='RECOMENDADO'?'var(--warn)':'var(--muted)'}">${a.prioridade}</td><td><span class="badge badge-${a.status==='instalado'?'ok':'err'}">${a.status==='instalado'?'✓ Instalado':'✗ Ausente'}</span></td></tr>`).join('')}
+    </table>
+  `;
+  document.getElementById('modal-detalhe').classList.add('open');
+}
+
+function fecharModal() { document.getElementById('modal-detalhe').classList.remove('open'); }
+
+// ======== ANÁLISE ========
+async function carregarAnalise() {
+  const { data: diags } = await db.from('diagnosticos').select('id,unidade,data_visita');
+  if (!diags || !diags.length) return;
+
+  const ids = diags.map(d => d.id);
+  const unidades = [...new Set(diags.map(d => d.unidade))].sort();
+
+  // Stats gerais
+  const { data: labs } = await db.from('laboratorio').select('diagnostico_id,qtd_computadores');
+  const totalPCs = (labs||[]).reduce((s,l) => s+(l.qtd_computadores||0), 0);
+  document.getElementById('st-total').textContent = diags.length;
+  document.getElementById('st-unidades').textContent = unidades.length;
+  document.getElementById('st-pcs').textContent = totalPCs;
+
+  // Apps DS por unidade
+  const { data: appsDS } = await db.from('apps_ds').select('diagnostico_id,nome,prioridade,status');
+  const diagMap = {};
+  diags.forEach(d => diagMap[d.id] = d.unidade);
+
+  // Calcular % essenciais instalados por unidade
+  const unidadeApps = {};
+  unidades.forEach(u => unidadeApps[u] = { total:0, inst:0 });
+  (appsDS||[]).forEach(a => {
+    const u = diagMap[a.diagnostico_id];
+    if (!u) return;
+    if (a.prioridade === 'ESSENCIAL') {
+      unidadeApps[u].total++;
+      if (a.status === 'instalado') unidadeApps[u].inst++;
+    }
+  });
+
+  // Compatibilidade por unidade
+  const { data: compat } = await db.from('compatibilidade').select('diagnostico_id,status');
+  const unidadeCompat = {};
+  unidades.forEach(u => unidadeCompat[u] = { total:0, ok:0 });
+  (compat||[]).forEach(c => {
+    const u = diagMap[c.diagnostico_id];
+    if (!u) return;
+    unidadeCompat[u].total++;
+    if (c.status === 'ok') unidadeCompat[u].ok++;
+  });
+
+  const compatPct = unidades.map(u => unidadeCompat[u].total ? Math.round(unidadeCompat[u].ok/unidadeCompat[u].total*100) : 0);
+  const totalCompatOK = (compat||[]).filter(c => c.status==='ok').length;
+  const totalCompat = (compat||[]).length;
+  document.getElementById('st-compat').textContent = totalCompat ? Math.round(totalCompatOK/totalCompat*100)+'%' : '—';
+  document.getElementById('st-compat').className = 'stat-val ' + (totalCompat && totalCompatOK/totalCompat >= 0.8 ? 'green' : 'warn');
+
+  // RAM por unidade
+  const { data: hwData } = await db.from('hardware').select('diagnostico_id,ram_gb');
+  const unidadeRAM = {};
+  unidades.forEach(u => unidadeRAM[u] = []);
+  (hwData||[]).forEach(h => {
+    const u = diagMap[h.diagnostico_id];
+    if (u && h.ram_gb) unidadeRAM[u].push(parseFloat(h.ram_gb));
+  });
+  const ramMedia = unidades.map(u => unidadeRAM[u].length ? (unidadeRAM[u].reduce((s,v)=>s+v,0)/unidadeRAM[u].length).toFixed(1) : 0);
+
+  // Labs por unidade
+  const unidadeLabs = {};
+  unidades.forEach(u => unidadeLabs[u] = 0);
+  (labs||[]).forEach(l => {
+    const u = diagMap[l.diagnostico_id];
+    if (u) unidadeLabs[u] += l.qtd_computadores||0;
+  });
+
+  // Apps mais ausentes
+  const ausentes = {};
+  (appsDS||[]).filter(a => a.status !== 'instalado').forEach(a => {
+    ausentes[a.nome] = (ausentes[a.nome]||0) + 1;
+  });
+  const top10 = Object.entries(ausentes).sort((a,b) => b[1]-a[1]).slice(0,10);
+  document.getElementById('apps-ausentes-lista').innerHTML = top10.length ?
+    `<table><tr><th>App</th><th>Unidades sem o app</th><th>Presença</th></tr>` +
+    top10.map(([nome, qtd]) => {
+      const pct = Math.round((1-qtd/diags.length)*100);
+      return `<tr><td>${nome}</td><td style="color:var(--red)">${qtd} / ${diags.length}</td>
+        <td style="width:200px"><div class="progress-wrap"><div class="progress-bar" style="width:${pct}%;background:${pct>=60?'var(--green)':'var(--warn)'}"></div></div></td></tr>`;
+    }).join('') + '</table>'
+    : '<p style="color:var(--muted)">Nenhum dado disponível</p>';
+
+  const colors = ['#00c8f5','#00f5a0','#ff7240','#ff3060','#006fe6','#a855f7','#f59e0b','#10b981'];
+
+  // Chart: Apps essenciais
+  destroyChart('chart-apps');
+  chartsInstanciados['chart-apps'] = new Chart(document.getElementById('chart-apps'), {
+    type:'bar',
+    data:{ labels:unidades, datasets:[{
+      label:'% Apps Essenciais Instalados',
+      data: unidades.map(u => unidadeApps[u].total ? Math.round(unidadeApps[u].inst/unidadeApps[u].total*100) : 0),
+      backgroundColor: colors.slice(0,unidades.length).map(c=>c+'99'), borderColor: colors.slice(0,unidades.length), borderWidth:1
+    }]},
+    options: chartOpts('%')
+  });
+
+  // Chart: Compatibilidade
+  destroyChart('chart-compat');
+  chartsInstanciados['chart-compat'] = new Chart(document.getElementById('chart-compat'), {
+    type:'radar',
+    data:{ labels:unidades, datasets:[{
+      label:'% Compatibilidade', data:compatPct,
+      backgroundColor:'rgba(0,200,245,.15)', borderColor:'var(--accent)', pointBackgroundColor:'var(--accent)'
+    }]},
+    options:{ scales:{ r:{ grid:{color:'rgba(12,61,102,.5)'}, ticks:{color:'#486f8c',backdropColor:'transparent'}, pointLabels:{color:'#b8ddf5',font:{size:11}} } }, plugins:{ legend:{labels:{color:'#b8ddf5'}} } }
+  });
+
+  // Chart: RAM
+  destroyChart('chart-ram');
+  chartsInstanciados['chart-ram'] = new Chart(document.getElementById('chart-ram'), {
+    type:'bar',
+    data:{ labels:unidades, datasets:[{
+      label:'RAM Média (GB)', data:ramMedia,
+      backgroundColor:unidades.map((_,i)=>colors[i%colors.length]+'99'),
+      borderColor:unidades.map((_,i)=>colors[i%colors.length]), borderWidth:1
+    }]},
+    options: chartOpts('GB')
+  });
+
+  // Chart: PCs por unidade
+  destroyChart('chart-labs');
+  chartsInstanciados['chart-labs'] = new Chart(document.getElementById('chart-labs'), {
+    type:'doughnut',
+    data:{ labels:unidades, datasets:[{ data:unidades.map(u=>unidadeLabs[u]), backgroundColor:colors.slice(0,unidades.length).map(c=>c+'cc') }]},
+    options:{ plugins:{ legend:{ labels:{color:'#b8ddf5',font:{size:11}} } } }
+  });
+}
+
+function destroyChart(id) {
+  if (chartsInstanciados[id]) { chartsInstanciados[id].destroy(); delete chartsInstanciados[id]; }
+}
+
+function chartOpts(unit) {
+  return {
+    responsive:true,
+    plugins:{ legend:{ labels:{color:'#b8ddf5'} } },
+    scales:{
+      x:{ ticks:{color:'#486f8c',font:{size:11}}, grid:{color:'rgba(12,61,102,.4)'} },
+      y:{ ticks:{color:'#486f8c',font:{size:11},callback:v=>v+unit}, grid:{color:'rgba(12,61,102,.4)'} }
+    }
+  };
+}
+
+// ======== RELATÓRIO ========
+async function carregarUnidadesRelatorio() {
+  const { data } = await db.from('diagnosticos').select('unidade').order('unidade');
+  if (!data) return;
+  const unidades = [...new Set(data.map(d => d.unidade))].sort();
+  const sel = document.getElementById('rel-unidade');
+  sel.innerHTML = '<option value="">Selecione a unidade</option>' + unidades.map(u => `<option>${u}</option>`).join('');
+}
+
+async function carregarDiagnosticosPorUnidade() {
+  const unidade = document.getElementById('rel-unidade').value;
+  if (!unidade) return;
+  const { data } = await db.from('diagnosticos').select('id,data_visita,criado_em,especialista').eq('unidade', unidade).order('data_visita', { ascending: false });
+  const sel = document.getElementById('rel-diagnostico');
+  sel.innerHTML = '<option value="">Selecione o diagnóstico</option>' +
+    (data||[]).map(d => `<option value="${d.id}">${d.data_visita || 'S/D'} — ${d.especialista||'S/N'}</option>`).join('');
+}
+
+async function gerarRelatorio() {
+  const id = document.getElementById('rel-diagnostico').value;
+  if (!id) { toast('Selecione um diagnóstico', 'err'); return; }
+
+  const { data: d } = await db.from('diagnosticos').select(`
+    *, rede(*), laboratorio(*), hardware(*), sistema_operacional(*),
+    apps_ds(*), apps_instalados(*), compatibilidade(*)
+  `).eq('id', id).single();
+  if (!d) return;
+
+  const hw = d.hardware?.[0] || {};
+  const so = d.sistema_operacional?.[0] || {};
+  const rd = d.rede?.[0] || {};
+  const labs = d.laboratorio || [];
+  const totalPCs = labs.reduce((s,l) => s+(l.qtd_computadores||0), 0);
+  const appsInst = (d.apps_ds||[]).filter(a => a.status === 'instalado');
+  const appsEss = (d.apps_ds||[]).filter(a => a.prioridade === 'ESSENCIAL');
+  const appsEssInst = appsEss.filter(a => a.status === 'instalado');
+  const compatOK = (d.compatibilidade||[]).filter(c => c.status === 'ok').length;
+  const compatTotal = (d.compatibilidade||[]).length;
+  const score = compatTotal ? Math.round(compatOK/compatTotal*100) : 0;
+
+  const output = document.getElementById('relatorio-output');
+  output.innerHTML = `
+    <div class="card">
+      <div class="card-title">Resumo — ${d.unidade}</div>
+      <div class="grid4" style="margin-bottom:20px">
+        <div class="stat"><div class="stat-label">Computadores</div><div class="stat-val blue">${totalPCs}</div></div>
+        <div class="stat"><div class="stat-label">Laboratórios</div><div class="stat-val">${labs.length}</div></div>
+        <div class="stat"><div class="stat-label">Apps Essenciais</div><div class="stat-val ${appsEssInst.length===appsEss.length?'green':'warn'}">${appsEssInst.length}/${appsEss.length}</div></div>
+        <div class="stat"><div class="stat-label">Score Compat.</div><div class="stat-val ${score>=80?'green':score>=50?'warn':'red'}">${score}%</div></div>
+      </div>
+
+      <div class="section-title">Dados da Visita</div>
+      <table>
+        <tr><td>Unidade</td><td style="color:#fff;font-weight:600">${d.unidade}</td></tr>
+        <tr><td>Especialista</td><td>${d.especialista||'—'}</td></tr>
+        <tr><td>Acompanhante</td><td>${d.acompanhante||'—'}</td></tr>
+        <tr><td>Data</td><td>${d.data_visita||'—'}</td></tr>
+      </table>
+
+      <div class="section-title">Rede</div>
+      <table>
+        <tr><td>Hostname</td><td style="color:var(--accent)">${rd.hostname||'—'}</td></tr>
+        <tr><td>IP</td><td style="color:var(--green)">${rd.ip||'—'}</td></tr>
+        <tr><td>Velocidade</td><td>${rd.velocidade||'—'}</td></tr>
+        <tr><td>Internet</td><td><span class="badge ${rd.internet?'badge-ok':'badge-err'}">${rd.internet?'✓ Conectado':'✗ Sem conexão'}</span></td></tr>
+      </table>
+
+      <div class="section-title">Laboratórios</div>
+      <table><tr><th>Lab</th><th>Computadores</th><th>Patrimônio</th><th>Obs</th></tr>
+      ${labs.map(l => `<tr><td style="color:var(--accent)">${l.nome_lab||'—'}</td><td>${l.qtd_computadores||0}</td><td>${l.codigo_patrimonio||'—'}</td><td>${l.observacoes||'—'}</td></tr>`).join('')}
+      </table>
+
+      <div class="section-title">Hardware</div>
+      <table>
+        <tr><td>Processador</td><td style="color:#fff">${hw.processador||'—'}</td></tr>
+        <tr><td>Núcleos</td><td>${hw.nucleos_fisicos||0} físicos · ${hw.nucleos_logicos||0} lógicos</td></tr>
+        <tr><td>RAM</td><td class="${hw.ram_gb>=8?'':''}"><span style="color:${hw.ram_gb>=8?'var(--green)':'var(--warn)'}">${hw.ram_gb||0} GB</span> — ${hw.ram_tipo||'—'}</td></tr>
+        ${(hw.discos||[]).map(d => `<tr><td>Disco (${d.letra})</td><td>${d.tipo} · ${d.total_gb} GB total · <span style="color:${d.livre_gb>20?'var(--green)':'var(--warn)'}">${d.livre_gb} GB livre</span></td></tr>`).join('')}
+      </table>
+
+      <div class="section-title">Sistema Operacional</div>
+      <table>
+        <tr><td>Sistema</td><td style="color:var(--accent)">${so.sistema||'—'}</td></tr>
+        <tr><td>Arquitetura</td><td>${so.arquitetura||'—'}</td></tr>
+        <tr><td>Data Instalação</td><td>${so.data_instalacao||'—'}</td></tr>
+        <tr><td>Último Boot</td><td>${so.ultimo_boot||'—'}</td></tr>
+      </table>
+
+      <div class="section-title">Apps Essenciais Faltando</div>
+      ${appsEss.filter(a => a.status!=='instalado').length
+        ? `<table><tr><th>App</th><th>Grupo</th><th>Status</th></tr>` +
+          appsEss.filter(a => a.status!=='instalado').map(a =>
+            `<tr><td style="color:#fff">${a.nome}</td><td style="color:var(--muted);font-size:11px">${a.grupo}</td><td><span class="badge badge-err">✗ Ausente</span></td></tr>`
+          ).join('') + '</table>'
+        : '<p style="color:var(--green);font-size:13px">✓ Todos os apps essenciais estão instalados!</p>'
+      }
+
+      <div class="section-title">Apps Instalados (${(d.apps_instalados||[]).length})</div>
+      <table><tr><th>Nome</th><th>Versão</th><th>Publicador</th><th>Data</th></tr>
+      ${(d.apps_instalados||[]).map(a => `<tr><td style="color:#fff">${a.nome}</td><td style="color:var(--accent);font-size:11px">${a.versao||'—'}</td><td style="font-size:11px;color:var(--muted)">${a.publicador||'—'}</td><td style="font-size:11px">${a.data_instalacao||'—'}</td></tr>`).join('')}
+      </table>
+
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);display:flex;gap:12px">
+        <button class="btn btn-primary" onclick="imprimirRelatorio()">🖨 Imprimir / Salvar PDF</button>
+      </div>
+    </div>
+  `;
+}
+
+function imprimirRelatorio() {
+  window.print();
+}
+
+// ======== TOAST ========
+function toast(msg, tipo='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${tipo}`;
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+// Print style
+const printStyle = document.createElement('style');
+printStyle.textContent = `@media print { nav,.filter-bar,.diag-actions,button{display:none!important} body{background:#fff;color:#111} .card,.stat{background:#f5f5f5;border:1px solid #ccc} }`;
+document.head.appendChild(printStyle);
+</script>
+</body>
+</html>
